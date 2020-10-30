@@ -119,6 +119,13 @@ void drive(float left, float right, float delay_seconds){
  
 int main()
 {	
+	front_bump_value = 1000;
+	back_bump_value = 1000;
+	
+	enable_servo(LEFT_MOTOR_PIN);	//initialize both motors and set speed to zero
+	enable_servo(RIGHT_MOTOR_PIN);
+	drive(0.0,0.0,1.0);
+	
 	while(is_above_photo_sum(photo_threshold)){
 		read_sensors(); //read all sensors and set global variables of their readouts
 		
