@@ -10,12 +10,10 @@ Vassar Cognitive Science - Robot Ethology
 //set pin address for hardware
 #define RIGHT_IR_PIN 0 //sensors
 #define LEFT_IR_PIN 1
-#define RIGHT_FRONT_PHOTO_PIN 2 
-#define LEFT_FRONT_PHOTO_PIN 3
+#define RIGHT_PHOTO_PIN 2 
+#define LEFT_PHOTO_PIN 3
 #define FRONT_BUMP_PIN 4
 #define BACK_BUMP_PIN 5
-#define RIGHT_REAR_PHOTO_PIN 6
-#define LEFT_REAR_PHOTO_PIN 7
 
 #define RIGHT_MOTOR_PIN 0 // motors
 #define LEFT_MOTOR_PIN 1
@@ -23,14 +21,13 @@ Vassar Cognitive Science - Robot Ethology
 //*************************************************** Variable Definitions ****************************************************//
 
 //global variables to store all current sensor values accessible to all functions and updated by the "read_sensors" function
-int right_ir_value, left_ir_value; right_front_photo_value, left_front_photo_value, right_rear_photo_value, left_rear_photo_value, front_bump_value, back_bump_value; 
+int right_ir_value, left_ir_value, right_photo_value, left_photo_value, front_bump_value, back_bump_value; 
 
 
 //threshold values
 int avoid_threshold   = 300; 	//the absolute difference between IR readings has to be above this for the avoid action
 int approach_threshold = 300;	//the absolute difference between IR readings has to be below this for the approach action
-int photo_threshold = 8;		//the absolute difference between photo sensor readings has to be above this for seek light/dark actions
-float photo_max = 200.0; 		//approximate max possible photo reading (set from observation)
+int photo_threshold = 1200;		//the absolute sum of photo sensor readings has to be above this for light/dark states
 
 //timer
 int timer_duration = 500;		//the time in milliseconds to wait between calling action commands.  This value is changed by each drive command called by actions
@@ -43,10 +40,8 @@ void read_sensors(); //function to read all sensor values and save to global var
 void read_sensors(){
 	right_ir_value = analog_et(RIGHT_IR_PIN);				//read the range sensor at the RIGHT_IR_PIN
 	left_ir_value = analog_et(LEFT_IR_PIN);					//read the range sensor at the LEFT_IR_PIN
-	right_front_photo_value = analog_et(RIGHT_FRONT_PHOTO_PIN);		//read the photo sensor at the RIGHT_FRONT_PHOTO_PIN
-	left_front_photo_value = analog_et(LEFT_FRONT_PHOTO_PIN); 		//read the photo sensor at the LEFT_FRONT_PHOTO_PIN
-	right_rear_photo_value = analog_et(RIGHT_REAR_PHOTO_PIN);		//read the photo sensor at the RIGHT_REAR_PHOTO_PIN
-	left_rear_photo_value = analog_et(LEFT_REAR_PHOTO_PIN);			//read the photo sensor at the LEFT_REAR_PHOTO_PIN
+	right_photo_value = analog_et(RIGHT_PHOTO_PIN);		//read the photo sensor at the RIGHT_FRONT_PHOTO_PIN
+	left_photo_value = analog_et(LEFT_PHOTO_PIN); 		//read the photo sensor at the LEFT_FRONT_PHOTO_PIN
 	int front_bump_sensor_value = analog10(FRONT_BUMP_PIN); 		//read the sensor at FRONT_BUMP_PIN
 	int back_bump_sensor_value = analog10(BACK_BUMP_PIN);			//read the sensor at BACK_BUMP_PIN
 	if(front_bump_sensor_value < 400){
@@ -66,8 +61,8 @@ bool is_above_distance_threshold(int threshold){
 
 bool is_above_photo_sum(int threshold); //return true if the sum of photo sensor values is above the specified threshold
 bool is_above_photo_sum(int threshold){
-	int photo_sum = left_front_photo_value + right_front_photo_value + left_rear_photo_value + right_rear_photo_value;	//get the sum of all the photo values
-	return (abs(photo_sum) > threshold); 					//returns true if the absolute sum of photo sensors is greater than the threshold, otherwise false
+	int photo_sum = left_photo_value + right_photo_value;	//get the sum of all the photo values
+	return (abs(photo_sum) < threshold); 					//returns true if the absolute sum of photo sensors is smaller than the threshold, otherwise false
 }
 
 bool is_front_bump();	//return true if the front bumper was hit
@@ -95,6 +90,12 @@ void cruise_zigzag();
 void stop();
 void dance();
 
+//HELPER FUNCTIONS
+float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high); //remap a value from a source range to a new range
+float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high){
+	return target_range_low + ((value - start_range_low)/(start_range_high - start_range_low)) * (target_range_high - target_range_low);
+}
+
 //MOTOR CONTROL
 void drive(float left, float right, float delay_seconds); //drive with a certain motor speed for a number of seconds
 void drive(float left, float right, float delay_seconds){
@@ -112,19 +113,13 @@ void drive(float left, float right, float delay_seconds){
 	set_servo_position(RIGHT_MOTOR_PIN, right_speed);
 }
 
-//HELPER FUNCTIONS
-float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high); //remap a value from a source range to a new range
-float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high){
-	return target_range_low + ((value - start_range_low)/(start_range_high - start_range_low)) * (target_range_high - target_range_low);
-}
-
 //================================================================================================================//
 //=======================================================MAIN=====================================================//
 //================================================================================================================//
  
 int main()
 {	
-	while(bool is_above_photo_sum(photo_threshold)){
+	while(is_above_photo_sum(photo_threshold)){
 		read_sensors(); //read all sensors and set global variables of their readouts
 		
 		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
@@ -135,12 +130,6 @@ int main()
 			}
 			else if(is_back_bump()){
 				escape_back();
-			}
-			else if(is_camera_detect_red(red_threshold)){
-				avoid_red();
-			}
-			else if(is_camera_detect_blue(blue_threshold)){
-				approach_blue();
 			}
 			else{
 				cruise_straight();
@@ -170,14 +159,11 @@ int main()
 //================================================================================================================//
 //========================================================ACTION==================================================//
 //================================================================================================================//
-}
 
-/******************************************************/
 void cruise_straight(){
 	drive(0.50, 0.50, 0.5);
 }
 
-/******************************************************/
 void cruise_zigzag(){
 	drive(0.25, 0.8, 0.2);
 	msleep(1000);
@@ -185,12 +171,10 @@ void cruise_zigzag(){
 	msleep(1000);
 }
 
-/******************************************************/
 void stop(){
 	drive(0.0, 0.0, 0.25);
 }
 
-/******************************************************/
 void dance(){
 	drive(0.0, 1.0, 1.2);
 	msleep(1000);
@@ -198,7 +182,6 @@ void dance(){
 	msleep(1000);
 }
 
-/******************************************************/
 void escape_front(){
 	float bump_midpoint = 250.0;
 	float bump_max = 400.0;
@@ -212,7 +195,7 @@ void escape_front(){
 		drive(-0.90, -0.0, backup_time);
 	}
 }
-/******************************************************/
+
 void escape_back(){
 	float bump_midpoint = 250.0;
 	float bump_max = 400.0;
@@ -226,9 +209,7 @@ void escape_back(){
 		drive(0.10, 0.9, backup_time);
 	}
 }
-/******************************************************/
 
-/******************************************************/
 void avoid(){
 	if(left_ir_value > avoid_threshold){
 		drive(0.5, -0.5, 0.1);
@@ -238,7 +219,7 @@ void avoid(){
 		drive(-0.5, 0.5, 0.1);
 	}
 }
-/******************************************************/
+
 void approach(){
 	if(left_ir_value > approach_threshold){
 		drive(0.1, 0.9, 0.5);
@@ -248,8 +229,4 @@ void approach(){
 	}
 }
 
-//================================================================================================================//
-//========================================================HELPERS=================================================//
-//================================================================================================================//
-/******************************************************/
 
