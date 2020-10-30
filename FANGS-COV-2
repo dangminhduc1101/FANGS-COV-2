@@ -131,45 +131,48 @@ int main()
 	enable_servo(LEFT_MOTOR_PIN);	//initialize both motors and set speed to zero
 	enable_servo(RIGHT_MOTOR_PIN);
 	drive(0.0,0.0,1.0);
-	
-	while(is_below_photo_sum(photo_threshold)){
-		read_sensors(); //read all sensors and set global variables of their readouts
-		
-		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+	if(is_below_photo_sum(photo_threshold)){
+		while(is_below_photo_sum(photo_threshold)){
+			read_sensors(); //read all sensors and set global variables of their readouts
 			
-			// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
-			if(is_front_bump()){
-				escape_front();
-			}
-			else if(is_back_bump()){
-				escape_back();
-			}
-			else{
-				cruise_straight();
-			}
-		}//end if timer elapsed
+			if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+				
+				// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
+				if(is_front_bump()){
+					escape_front();
+				}
+				else if(is_back_bump()){
+					escape_back();
+				}
+				else{
+					cruise_straight();
+				}
+			}//end if timer elapsed
+		}
 	}	
-	while(is_above_photo_sum(photo_threshold)){
-		read_sensors(); //read all sensors and set global variables of their readouts
-		
-		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+	else{	
+		while(is_above_photo_sum(photo_threshold)){
+			read_sensors(); //read all sensors and set global variables of their readouts
 			
-			// hierarchy:  escape front, escape back, avoid, cruise zigzag
-			if(is_front_bump()){
-				escape_front();
-			}
-			else if(is_back_bump()){
-				escape_back();
-			}
-			else if(is_above_distance_threshold(avoid_threshold)){
-				avoid();
-			}
-			else{
-				cruise_zigzag();
+			if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+				
+				// hierarchy:  escape front, escape back, avoid, cruise zigzag
+				if(is_front_bump()){
+					escape_front();
+				}
+				else if(is_back_bump()){
+					escape_back();
+				}
+				else if(is_above_distance_threshold(avoid_threshold)){
+					avoid();
+				}
+				else{
+					cruise_zigzag();
+				}
 			}
 		}
 	}
-}
+}	
 //================================================================================================================//
 //========================================================ACTION==================================================//
 //================================================================================================================//
@@ -242,3 +245,5 @@ void approach(){
 		drive(0.9, 0.1, 0.5);
 	}
 }
+
+
