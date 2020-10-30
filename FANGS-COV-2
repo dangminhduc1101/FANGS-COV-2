@@ -17,37 +17,14 @@ Vassar Cognitive Science - Robot Ethology
 #define RIGHT_REAR_PHOTO_PIN 6
 #define LEFT_REAR_PHOTO_PIN 7
 
-#define RIGHT_MOTOR_PIN 0
+#define RIGHT_MOTOR_PIN 0 // motors
 #define LEFT_MOTOR_PIN 1
-//*************************************************** Function Declarations ***********************************************************//
-//CHECKS
-void read_sensors(); //function to read all sensor values and save to global vars
-bool is_above_distance_threshold(int threshold); //return true if one and only one IR sensor is above the specified threshold
-bool is_above_photo_differential(int threshold); //return true if the absolute difference between photo sensor values is above the specified threshold
-bool is_front_bump();	//return true if the front bumper was hit
-bool is_back_bump();	//return true if the back bumper was hit
-bool timer_elapsed();	//return true if our timer has elapsed
 
-//ACTIONS
-void escape_front();
-void escape_back();
-void avoid_object();
-void approach();
-void cruise_straight();
-void cruise_zigzag();
-void stop();
-void dance();
-
-//MOTOR CONTROL
-void drive(float left, float right, float delay_seconds); //drive with a certain motor speed for a number of seconds
-
-//HELPER FUNCTIONS
-float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high); //remap a value from a source range to a new range
-
-//*************************************************** Variable Definitions ****************************************************/
+//*************************************************** Variable Definitions ****************************************************//
 
 //global variables to store all current sensor values accessible to all functions and updated by the "read_sensors" function
-int left_photo_value, right_photo_value, front_bump_value, back_bump_value, left_ir_value, right_ir_value;
+int right_ir_value, left_ir_value; right_front_photo_value, left_front_photo_value, right_rear_photo_value, left_rear_photo_value, front_bump_value, back_bump_value; 
+
 
 //threshold values
 int avoid_threshold   = 300; 	//the absolute difference between IR readings has to be above this for the avoid action
@@ -59,30 +36,92 @@ float photo_max = 200.0; 		//approximate max possible photo reading (set from ob
 int timer_duration = 500;		//the time in milliseconds to wait between calling action commands.  This value is changed by each drive command called by actions
 unsigned long start_time = 0;	//store the system time each time we start an action so we can see if our time has elapsed without a blocking delay
 
-//================================================================================================================//
-//=======================================================MAIN=====================================================//
-//================================================================================================================//
+//*************************************************** Function Declarations ****************************************************//
 
-int right_ir_value, left_ir_value; right_front_photo_value, left_front_photo_value, right_rear_photo_value, left_rear_photo_value, front_bump_value, back_bump_value; 
-
-
+//SENSORS READING
 void read_sensors(); //function to read all sensor values and save to global vars
 void read_sensors(){
-	right_ir_value = analog_et(RIGHT_IR_PIN);						//read the range sensor at the RIGHT_IR_PIN
-	left_ir_value = analog_et(LEFT_IR_PIN);							//read the range sensor at the LEFT_IR_PIN
+	right_ir_value = analog_et(RIGHT_IR_PIN);				//read the range sensor at the RIGHT_IR_PIN
+	left_ir_value = analog_et(LEFT_IR_PIN);					//read the range sensor at the LEFT_IR_PIN
 	right_front_photo_value = analog_et(RIGHT_FRONT_PHOTO_PIN);		//read the photo sensor at the RIGHT_FRONT_PHOTO_PIN
 	left_front_photo_value = analog_et(LEFT_FRONT_PHOTO_PIN); 		//read the photo sensor at the LEFT_FRONT_PHOTO_PIN
 	right_rear_photo_value = analog_et(RIGHT_REAR_PHOTO_PIN);		//read the photo sensor at the RIGHT_REAR_PHOTO_PIN
 	left_rear_photo_value = analog_et(LEFT_REAR_PHOTO_PIN);			//read the photo sensor at the LEFT_REAR_PHOTO_PIN
+	int front_bump_sensor_value = analog10(FRONT_BUMP_PIN); 		//read the sensor at FRONT_BUMP_PIN
+	int back_bump_sensor_value = analog10(BACK_BUMP_PIN);			//read the sensor at BACK_BUMP_PIN
+	if(front_bump_sensor_value < 400){
+		front_bump_value = front_bump_sensor_value; 
+	}	
+	if(back_bump_sensor_value < 400){
+		back_bump_value = back_bump_sensor_value;
+	}
 }
+
+//CHECKS
+
+bool is_above_distance_threshold(int threshold); //return true if one and only one range sensor is above the specified threshold
+bool is_above_distance_threshold(int threshold){
+	return (left_ir_value > threshold || right_ir_value > threshold);  //returns true if one (exclusive) ir value is above the threshold, otherwise returns false
+}
+
 bool is_above_photo_sum(int threshold); //return true if the sum of photo sensor values is above the specified threshold
 bool is_above_photo_sum(int threshold){
 	int photo_sum = left_front_photo_value + right_front_photo_value + left_rear_photo_value + right_rear_photo_value;	//get the sum of all the photo values
 	return (abs(photo_sum) > threshold); 					//returns true if the absolute sum of photo sensors is greater than the threshold, otherwise false
 }
 
-int photo_threshold = 
+bool is_front_bump();	//return true if the front bumper was hit
+bool is_front_bump(){
+	return (front_bump_value <= 400);	 //return true if our bump value is less than or equal to 400
+}
 
+bool is_back_bump();	//return true if the back bumper was hit
+bool is_back_bump(){
+	return (back_bump_value <= 400);  //return true if our bump value is less than or equal to 400
+}
+
+bool timer_elapsed();	//return true if our timer has elapsed
+bool timer_elapsed(){
+	return (systime() > (start_time + timer_duration)); //return true if the current time is greater than our start time plus timer duration
+}
+
+//ACTIONS
+void escape_front();
+void escape_back();
+void avoid();
+void approach();
+void cruise_straight();
+void cruise_zigzag();
+void stop();
+void dance();
+
+//MOTOR CONTROL
+void drive(float left, float right, float delay_seconds); //drive with a certain motor speed for a number of seconds
+void drive(float left, float right, float delay_seconds){
+	//850 is full motor speed clockwise, 1050 is stopped,  1250 is full motor speed counterclockwise
+	//servo is stopped from ~1044 to 1055
+	float left_speed = map(left, -1.0, 1.0, 850.0, 1250.0); //call the map function to map our speed (set between -1 and 1) to the appropriate range of motor values
+	float right_speed = map(right, -1.0, 1.0, 1250.0, 850.0);
+	
+	timer_duration = (int)(delay_seconds * 1000.0); //multiply our desired time in seconds by 1000 to get milliseconds and update this global variable
+	start_time = systime(); //update our start time to reflect the time we start driving (in ms)
+	front_bump_value = 1000; //reset our sticky bumper values so we start this cycle as if we have not hit anything (hits read out <400)
+	back_bump_value = 1000; 
+	
+	set_servo_position(LEFT_MOTOR_PIN, left_speed); //set the servos to run at the mapped speed
+	set_servo_position(RIGHT_MOTOR_PIN, right_speed);
+}
+
+//HELPER FUNCTIONS
+float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high); //remap a value from a source range to a new range
+float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high){
+	return target_range_low + ((value - start_range_low)/(start_range_high - start_range_low)) * (target_range_high - target_range_low);
+}
+
+//================================================================================================================//
+//=======================================================MAIN=====================================================//
+//================================================================================================================//
+ 
 int main()
 {	
 	while(bool is_above_photo_sum(photo_threshold)){
@@ -129,61 +168,8 @@ int main()
 }
 
 //================================================================================================================//
-//====================================================PERCEPTION==================================================//
-//================================================================================================================//
-void read_sensors(){
-	left_photo_value = analog_et(LEFT_PHOTO_PIN); 		//read the photo sensor at the LEFT_PHOTO_PIN
-	right_photo_value = analog_et(RIGHT_PHOTO_PIN);		//read the photo sensor at the RIGHT_PHOTO_PIN
-	left_ir_value = analog_et(LEFT_IR_PIN); 			//read the sensor for the left IR at LEFT_IR_PIN
-	right_ir_value = analog_et(RIGHT_IR_PIN); 			//read the sensor for the right IR at RIGHT_IR_PIN
-	
-	int front_bump_sensor_value = analog10(FRONT_BUMP_PIN); //read the sensor at front_bump_pin
-	int back_bump_sensor_value = analog10(BACK_BUMP_PIN);	//read the back bumper sensor
-	//the default (unbumped)value of these sensors jumps between 900 and 1024, with contact reading values between 0 and 400.  We only care about these.
-	//update this value whenever it is below a threshold (note this is sticky and we'll need to refresh it elsewhere)
-	if(front_bump_sensor_value < 400){
-		front_bump_value = front_bump_sensor_value; 
-	}	
-	if(back_bump_sensor_value < 400){
-		back_bump_value = back_bump_sensor_value;
-	}
-}	
-
-/******************************************************/
-bool is_above_photo_differential(int threshold){
-	int photo_difference = left_photo_value - right_photo_value;	//get the difference between the photo values
-	return (abs(photo_difference) > threshold); 					//returns true if the absolute difference between photo sensors is greater than the threshold, otherwise false
-}
-/******************************************************/
-bool is_above_distance_threshold(int threshold){
-	return (left_ir_value > threshold || right_ir_value > threshold);  //returns true if one (exclusive) ir value is above the threshold, otherwise returns false
-}
-/******************************************************/
-bool is_front_bump(){
-	return (front_bump_value <= 400);	 //return true if our bump value is less than or equal to 400
-}
-/******************************************************/
-bool is_back_bump(){
-	return (back_bump_value <= 400);  //return true if our bump value is less than or equal to 400
-}
-
-
-//================================================================================================================//
 //========================================================ACTION==================================================//
 //================================================================================================================//
-void drive(float left, float right, float delay_seconds){
-	//850 is full motor speed clockwise, 1050 is stopped,  1250 is full motor speed counterclockwise
-	//servo is stopped from ~1044 to 1055
-	float left_speed = map(left, -1.0, 1.0, 850.0, 1250.0); //call the map function to map our speed (set between -1 and 1) to the appropriate range of motor values
-	float right_speed = map(right, -1.0, 1.0, 1250.0, 850.0);
-	
-	timer_duration = (int)(delay_seconds * 1000.0); //multiply our desired time in seconds by 1000 to get milliseconds and update this global variable
-	start_time = systime(); //update our start time to reflect the time we start driving (in ms)
-	front_bump_value = 1000; //reset our sticky bumper values so we start this cycle as if we have not hit anything (hits read out <400)
-	back_bump_value = 1000; 
-	
-	set_servo_position(LEFT_MOTOR_PIN, left_speed); //set the servos to run at the mapped speed
-	set_servo_position(RIGHT_MOTOR_PIN, right_speed);
 }
 
 /******************************************************/
@@ -265,10 +251,5 @@ void approach(){
 //================================================================================================================//
 //========================================================HELPERS=================================================//
 //================================================================================================================//
-bool timer_elapsed(){
-	return (systime() > (start_time + timer_duration)); //return true if the current time is greater than our start time plus timer duration
-}
 /******************************************************/
-float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high){
-	return target_range_low + ((value - start_range_low)/(start_range_high - start_range_low)) * (target_range_high - target_range_low);
-}
+
