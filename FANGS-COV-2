@@ -16,7 +16,7 @@ Vassar Cognitive Science - Robot Ethology
 #define BACK_BUMP_PIN 5
 
 #define RIGHT_MOTOR_PIN 0 // motors
-#define LEFT_MOTOR_PIN 1
+#define LEFT_MOTOR_PIN 2
 
 //*************************************************** Variable Definitions ****************************************************//
 
@@ -59,10 +59,16 @@ bool is_above_distance_threshold(int threshold){
 	return (left_ir_value > threshold || right_ir_value > threshold);  //returns true if one (exclusive) ir value is above the threshold, otherwise returns false
 }
 
+bool is_below_photo_sum(int threshold); //return true if the sum of photo sensor values is below the specified threshold
+bool is_below_photo_sum(int threshold){
+	int photo_sum = left_photo_value + right_photo_value;	//get the sum of all the photo values
+	return (abs(photo_sum) < threshold); 					//returns true if the absolute sum of photo sensors is smaller than the threshold, otherwise false
+}
+
 bool is_above_photo_sum(int threshold); //return true if the sum of photo sensor values is above the specified threshold
 bool is_above_photo_sum(int threshold){
 	int photo_sum = left_photo_value + right_photo_value;	//get the sum of all the photo values
-	return (abs(photo_sum) < threshold); 					//returns true if the absolute sum of photo sensors is smaller than the threshold, otherwise false
+	return (abs(photo_sum) > threshold); 					//returns true if the absolute sum of photo sensors is greater than the threshold, otherwise false
 }
 
 bool is_front_bump();	//return true if the front bumper was hit
@@ -126,7 +132,7 @@ int main()
 	enable_servo(RIGHT_MOTOR_PIN);
 	drive(0.0,0.0,1.0);
 	
-	while(is_above_photo_sum(photo_threshold)){
+	while(is_below_photo_sum(photo_threshold)){
 		read_sensors(); //read all sensors and set global variables of their readouts
 		
 		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
@@ -143,26 +149,27 @@ int main()
 			}
 		}//end if timer elapsed
 	}	
-	read_sensors(); //read all sensors and set global variables of their readouts
+	while(is_above_photo_sum(photo_threshold)){
+		read_sensors(); //read all sensors and set global variables of their readouts
 		
-	if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
 			
 			// hierarchy:  escape front, escape back, avoid, cruise zigzag
-		if(is_front_bump()){
+			if(is_front_bump()){
 				escape_front();
-		}
-		else if(is_back_bump()){
+			}
+			else if(is_back_bump()){
 				escape_back();
-		}
-		else if(is_above_distance_threshold(avoid_threshold)){
+			}
+			else if(is_above_distance_threshold(avoid_threshold)){
 				avoid();
-		}
-		else{
+			}
+			else{
 				cruise_zigzag();
+			}
 		}
 	}
 }
-
 //================================================================================================================//
 //========================================================ACTION==================================================//
 //================================================================================================================//
@@ -235,5 +242,3 @@ void approach(){
 		drive(0.9, 0.1, 0.5);
 	}
 }
-
-
