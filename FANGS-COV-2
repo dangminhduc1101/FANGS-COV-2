@@ -1,1 +1,87 @@
-sdfsdfs
+/**
+Vassar Cognitive Science - Robot Ethology
+
+
+*/
+
+#include <stdlib.h> //import for min, max, etc.
+#include <stdbool.h> //import for boolean support
+
+//set pin address for hardware
+#define RIGHT_IR_PIN 0 //sensors
+#define LEFT_IR_PIN 1
+#define RIGHT_FRONT_PHOTO_PIN 2 
+#define LEFT_FRONT_PHOTO_PIN 3
+#define FRONT_BUMP_PIN 4
+#define BACK_BUMP_PIN 5
+#define RIGHT_REAR_PHOTO_PIN 6
+#define LEFT_REAR_PHOTO_PIN 7
+
+#define RIGHT_MOTOR_PIN 0
+#define LEFT_MOTOR_PIN 1
+
+int right_ir_value, left_ir_value; right_front_photo_value, left_front_photo_value, right_rear_photo_value, left_rear_photo_value, front_bump_value, back_bump_value; 
+
+
+void read_sensors(); //function to read all sensor values and save to global vars
+void read_sensors(){
+	right_ir_value = analog_et(RIGHT_IR_PIN);						//read the range sensor at the RIGHT_IR_PIN
+	left_ir_value = analog_et(LEFT_IR_PIN);							//read the range sensor at the LEFT_IR_PIN
+	right_front_photo_value = analog_et(RIGHT_FRONT_PHOTO_PIN);		//read the photo sensor at the RIGHT_FRONT_PHOTO_PIN
+	left_front_photo_value = analog_et(LEFT_FRONT_PHOTO_PIN); 		//read the photo sensor at the LEFT_FRONT_PHOTO_PIN
+	right_rear_photo_value = analog_et(RIGHT_REAR_PHOTO_PIN);		//read the photo sensor at the RIGHT_REAR_PHOTO_PIN
+	left_rear_photo_value = analog_et(LEFT_REAR_PHOTO_PIN);			//read the photo sensor at the LEFT_REAR_PHOTO_PIN
+}
+bool is_above_photo_sum(int threshold); //return true if the sum of photo sensor values is above the specified threshold
+bool is_above_photo_sum(int threshold){
+	int photo_sum = left_front_photo_value + right_front_photo_value + left_rear_photo_value + right_rear_photo_value;	//get the sum of all the photo values
+	return (abs(photo_sum) > threshold); 					//returns true if the absolute sum of photo sensors is greater than the threshold, otherwise false
+}
+
+int photo_threshold = 
+
+int main()
+{	
+	while(bool is_above_photo_sum(photo_threshold)){
+		read_sensors(); //read all sensors and set global variables of their readouts
+		
+		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+			
+			// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
+			if(is_front_bump()){
+				escape_front();
+			}
+			else if(is_back_bump()){
+				escape_back();
+			}
+			else if(is_camera_detect_red(red_threshold)){
+				avoid_red();
+			}
+			else if(is_camera_detect_blue(blue_threshold)){
+				approach_blue();
+			}
+			else{
+				cruise_straight();
+			}
+		}//end if timer elapsed
+	}	
+	read_sensors(); //read all sensors and set global variables of their readouts
+		
+	if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+			
+			// hierarchy:  escape front, escape back, avoid, cruise zigzag
+		if(is_front_bump()){
+				escape_front();
+		}
+		else if(is_back_bump()){
+				escape_back();
+		}
+		else if(is_above_distance_threshold(avoid_threshold)){
+				avoid();
+		}
+		else{
+				cruise_zigzag();
+		}
+	}
+}
+
