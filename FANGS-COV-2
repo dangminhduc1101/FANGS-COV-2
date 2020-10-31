@@ -132,7 +132,7 @@ int main()
 	enable_servo(RIGHT_MOTOR_PIN);
 	drive(0.0,0.0,1.0);
 	
-	while(is_below_photo_sum(photo_threshold)){
+	while(true){
 		read_sensors(); //read all sensors and set global variables of their readouts
 			
 		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
