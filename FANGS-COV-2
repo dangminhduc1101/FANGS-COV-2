@@ -131,12 +131,13 @@ int main()
 	enable_servo(LEFT_MOTOR_PIN);	//initialize both motors and set speed to zero
 	enable_servo(RIGHT_MOTOR_PIN);
 	drive(0.0,0.0,1.0);
-	if(is_below_photo_sum(photo_threshold)){
-		while(is_below_photo_sum(photo_threshold)){
-			read_sensors(); //read all sensors and set global variables of their readouts
+	
+	while(is_below_photo_sum(photo_threshold)){
+		read_sensors(); //read all sensors and set global variables of their readouts
 			
-			if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
+		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
 				
+			if(is_below_photo_sum(photo_threshold)){
 				// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
 				if(is_front_bump()){
 					escape_front();
@@ -148,14 +149,8 @@ int main()
 					cruise_straight();
 				}
 			}//end if timer elapsed
-		}
-	}	
-	else{	
-		while(is_above_photo_sum(photo_threshold)){
-			read_sensors(); //read all sensors and set global variables of their readouts
-			
-			if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
-				
+		
+			else{
 				// hierarchy:  escape front, escape back, avoid, cruise zigzag
 				if(is_front_bump()){
 					escape_front();
