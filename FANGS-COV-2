@@ -65,12 +65,6 @@ bool is_below_photo_sum(int threshold){
 	return (abs(photo_sum) < threshold); 					//returns true if the absolute sum of photo sensors is smaller than the threshold, otherwise false
 }
 
-bool is_above_photo_sum(int threshold); //return true if the sum of photo sensor values is above the specified threshold
-bool is_above_photo_sum(int threshold){
-	int photo_sum = left_photo_value + right_photo_value;	//get the sum of all the photo values
-	return (abs(photo_sum) > threshold); 					//returns true if the absolute sum of photo sensors is greater than the threshold, otherwise false
-}
-
 bool is_front_bump();	//return true if the front bumper was hit
 bool is_front_bump(){
 	return (front_bump_value <= 400);	 //return true if our bump value is less than or equal to 400
