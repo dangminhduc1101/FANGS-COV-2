@@ -27,7 +27,6 @@ int right_ir_value, left_ir_value, right_photo_value, left_photo_value, front_bu
 //threshold values
 int avoid_threshold   = 300; 	//the absolute difference between IR readings has to be above this for the avoid action
 int approach_threshold = 300;	//the absolute difference between IR readings has to be below this for the approach action
-int photo_threshold = 1200;		//the absolute sum of photo sensor readings has to be above this for light/dark states
 
 //timer
 int timer_duration = 500;		//the time in milliseconds to wait between calling action commands.  This value is changed by each drive command called by actions
@@ -40,8 +39,8 @@ void read_sensors(); //function to read all sensor values and save to global var
 void read_sensors(){
 	right_ir_value = analog_et(RIGHT_IR_PIN);				//read the range sensor at the RIGHT_IR_PIN
 	left_ir_value = analog_et(LEFT_IR_PIN);					//read the range sensor at the LEFT_IR_PIN
-	right_photo_value = analog_et(RIGHT_PHOTO_PIN);		//read the photo sensor at the RIGHT_FRONT_PHOTO_PIN
-	left_photo_value = analog_et(LEFT_PHOTO_PIN); 		//read the photo sensor at the LEFT_FRONT_PHOTO_PIN
+	right_photo_value = analog_et(RIGHT_PHOTO_PIN);		//read the photo sensor at the RIGHT_PHOTO_PIN
+	left_photo_value = analog_et(LEFT_PHOTO_PIN); 		//read the photo sensor at the LEFT_PHOTO_PIN
 	int front_bump_sensor_value = analog10(FRONT_BUMP_PIN); 		//read the sensor at FRONT_BUMP_PIN
 	int back_bump_sensor_value = analog10(BACK_BUMP_PIN);			//read the sensor at BACK_BUMP_PIN
 	if(front_bump_sensor_value < 400){
@@ -57,12 +56,6 @@ void read_sensors(){
 bool is_above_distance_threshold(int threshold); //return true if one and only one range sensor is above the specified threshold
 bool is_above_distance_threshold(int threshold){
 	return (left_ir_value > threshold || right_ir_value > threshold);  //returns true if one (exclusive) ir value is above the threshold, otherwise returns false
-}
-
-bool is_below_photo_sum(int threshold); //return true if the sum of photo sensor values is below the specified threshold
-bool is_below_photo_sum(int threshold){
-	int photo_sum = left_photo_value + right_photo_value;	//get the sum of all the photo values
-	return (abs(photo_sum) < threshold); 					//returns true if the absolute sum of photo sensors is smaller than the threshold, otherwise false
 }
 
 bool is_front_bump();	//return true if the front bumper was hit
@@ -126,12 +119,15 @@ int main()
 	enable_servo(RIGHT_MOTOR_PIN);
 	drive(0.0,0.0,1.0);
 	
+	int photo_sum = left_photo_value + right_photo_value;
+	int photo_threshold = 1200;		//the absolute sum of photo sensor readings has to be above this for light/dark states
+	
 	while(true){
 		read_sensors(); //read all sensors and set global variables of their readouts
 			
 		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
 				
-			if(is_below_photo_sum(photo_threshold)){
+			if(photo_sum < photo_threshold){
 				// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
 				if(is_front_bump()){
 					escape_front();
