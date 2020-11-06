@@ -26,7 +26,6 @@ int right_ir_value, left_ir_value, right_photo_value, left_photo_value, front_bu
 
 //threshold values
 int avoid_threshold   = 300; 	//the absolute difference between IR readings has to be above this for the avoid action
-int approach_threshold = 300;	//the absolute difference between IR readings has to be below this for the approach action
 
 //timer
 int timer_duration = 500;		//the time in milliseconds to wait between calling action commands.  This value is changed by each drive command called by actions
@@ -68,6 +67,13 @@ bool is_back_bump(){
 	return (back_bump_value <= 400);  //return true if our bump value is less than or equal to 400
 }
 
+bool is_green();
+bool is_green(){
+	int center_green = get_object_center(0,0).x;
+	int center_camera = 0.5 * get_camera_width();
+	return (center_green > center_camera || center_green < center_camera);
+}
+
 bool timer_elapsed();	//return true if our timer has elapsed
 bool timer_elapsed(){
 	return (systime() > (start_time + timer_duration)); //return true if the current time is greater than our start time plus timer duration
@@ -77,11 +83,11 @@ bool timer_elapsed(){
 void escape_front();
 void escape_back();
 void avoid();
-void approach();
 void cruise_straight();
 void cruise_zigzag();
 void stop();
 void dance();
+void approach_green();
 
 //HELPER FUNCTIONS
 float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high); //remap a value from a source range to a new range
@@ -119,12 +125,17 @@ int main()
 	enable_servo(RIGHT_MOTOR_PIN);
 	drive(0.0,0.0,1.0);
 	
-	int photo_sum = left_photo_value + right_photo_value;
-	int photo_threshold = 1200;		//the absolute sum of photo sensor readings has to be above this for light/dark states
-	
 	while(true){
+		camera_open(LOW_RES);
+		camera_update();
 		read_sensors(); //read all sensors and set global variables of their readouts
 			
+		int photo_sum = left_photo_value + right_photo_value; // the sum of photo sensor readings
+		int center_green = get_object_center(0,0).x;
+		int center_camera = 0.5 * get_camera_width();
+		printf("camera values: %i, %i, \n", center_green, center_camera);
+		int photo_threshold = 80;		//the sum of photo sensor readings has to be below this for light states
+		
 		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
 				
 			if(photo_sum < photo_threshold){
@@ -135,9 +146,15 @@ int main()
 				else if(is_back_bump()){
 					escape_back();
 				}
+				else if(is_green()){
+					approach_green();
+				}
+				else if(is_above_distance_threshold(avoid_threshold)){
+					avoid();
+				}
 				else{
 					cruise_straight();
-				}
+				}		
 			}//end if timer elapsed
 		
 			else{
@@ -157,32 +174,11 @@ int main()
 			}
 		}
 	}
+	return 0; 
 }	
 //================================================================================================================//
 //========================================================ACTION==================================================//
 //================================================================================================================//
-
-void cruise_straight(){
-	drive(0.50, 0.50, 0.5);
-}
-
-void cruise_zigzag(){
-	drive(0.25, 0.8, 0.2);
-	msleep(1000);
-	drive(0.4, 0.25, 0.2);
-	msleep(1000);
-}
-
-void stop(){
-	drive(0.0, 0.0, 0.25);
-}
-
-void dance(){
-	drive(0.0, 1.0, 1.2);
-	msleep(1000);
-	drive(0.6, 0.0, 1.2);
-	msleep(1000);
-}
 
 void escape_front(){
 	float bump_midpoint = 250.0;
@@ -222,13 +218,35 @@ void avoid(){
 	}
 }
 
-void approach(){
-	if(left_ir_value > approach_threshold){
+void cruise_straight(){
+	drive(0.5, 0.5, 0.5);
+}
+
+void cruise_zigzag(){
+	drive(0.25, 0.8, 0.2);
+	msleep(1000);
+	drive(0.4, 0.25, 0.2);
+	msleep(1000);
+}
+
+void stop(){
+	drive(0.0, 0.0, 0.25);
+}
+
+void dance(){
+	drive(0.0, 1.0, 1.2);
+	msleep(1000);
+	drive(0.6, 0.0, 1.2);
+	msleep(1000);
+}
+
+void approach_green(){
+	int center_green = get_object_center(0,0).x;
+	int center_camera = 0.5 * get_camera_width();
+	if(center_green > center_camera){
 		drive(0.1, 0.9, 0.5);
-	}
-	else if(right_ir_value > approach_threshold){
+	}	
+	else if(center_green < center_camera){
 		drive(0.9, 0.1, 0.5);
 	}
 }
-
-
