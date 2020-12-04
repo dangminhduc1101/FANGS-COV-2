@@ -1,5 +1,5 @@
 /**
-Vassar Cognitive Science - Robot Ethology
+Vassar Cognitive Science - Novel Behavior Lab
 
 
 */
@@ -23,15 +23,23 @@ Vassar Cognitive Science - Robot Ethology
 //global variables to store all current sensor values accessible to all functions and updated by the "read_sensors" function
 int right_ir_value, left_ir_value, right_photo_value, left_photo_value, front_bump_value, back_bump_value; 
 
-
-//threshold values
-int avoid_threshold   = 300; 	//the absolute difference between IR readings has to be above this for the avoid action
+// PARAMETERS AND THRESHOLD
+int avoid_threshold = 300;
+int green_sensitivity = 4000;
+int red_sensitivity = 4000;
+int photo_threshold = 80;		//the sum of photo sensor readings has to be below this for light states
 
 //timer
 int timer_duration = 500;		//the time in milliseconds to wait between calling action commands.  This value is changed by each drive command called by actions
 unsigned long start_time = 0;	//store the system time each time we start an action so we can see if our time has elapsed without a blocking delay
+static int time = 0;
 
-//*************************************************** Function Declarations ****************************************************//
+//PHASES
+int time_hunger = 500;
+int time_scan = 1000;
+int time_dance = 1200;
+
+//***************************************************Function Declarations**************************************************//
 
 //SENSORS READING
 void read_sensors(); //function to read all sensor values and save to global vars
@@ -51,10 +59,9 @@ void read_sensors(){
 }
 
 //CHECKS
-
-bool is_above_distance_threshold(int threshold); //return true if one and only one range sensor is above the specified threshold
-bool is_above_distance_threshold(int threshold){
-	return (left_ir_value > threshold || right_ir_value > threshold);  //returns true if one (exclusive) ir value is above the threshold, otherwise returns false
+bool is_above_distance_threshold(); //return true if one and only one range sensor is above the specified threshold
+bool is_above_distance_threshold(){
+	return (left_ir_value > avoid_threshold || right_ir_value > avoid_threshold);  //returns true if one (exclusive) ir value is above the threshold, otherwise returns false
 }
 
 bool is_front_bump();	//return true if the front bumper was hit
@@ -69,9 +76,14 @@ bool is_back_bump(){
 
 bool is_green();
 bool is_green(){
-	int center_green = get_object_center(0,0).x;
-	int center_camera = 0.5 * get_camera_width();
-	return (center_green > center_camera || center_green < center_camera);
+	int green_area = get_object_area(0,0);
+	return (green_area > green_sensitivity);
+}
+
+bool is_red();
+bool is_red(){
+	int red_area = get_object_area(1,0);
+	return (red_area > red_sensitivity);
 }
 
 bool timer_elapsed();	//return true if our timer has elapsed
@@ -79,15 +91,24 @@ bool timer_elapsed(){
 	return (systime() > (start_time + timer_duration)); //return true if the current time is greater than our start time plus timer duration
 }
 
+//state
+void state_light();
+void state_dark();
+void state_hunger();
+void state_scan();
+
 //ACTIONS
 void escape_front();
 void escape_back();
 void avoid();
 void cruise_straight();
+void cruise_straight_hunger();
 void cruise_zigzag();
 void stop();
 void dance();
 void approach_green();
+void avoid_red();
+void approach_red();
 
 //HELPER FUNCTIONS
 float map(float value, float start_range_low, float start_range_high, float target_range_low, float target_range_high); //remap a value from a source range to a new range
@@ -118,64 +139,123 @@ void drive(float left, float right, float delay_seconds){
  
 int main()
 {	
+	camera_open(HIGH_RES);
+	
 	front_bump_value = 1000;
 	back_bump_value = 1000;
 	
 	enable_servo(LEFT_MOTOR_PIN);	//initialize both motors and set speed to zero
 	enable_servo(RIGHT_MOTOR_PIN);
+	
 	drive(0.0,0.0,1.0);
 	
 	while(true){
-		camera_open(LOW_RES);
 		camera_update();
-		read_sensors(); //read all sensors and set global variables of their readouts
-			
+		read_sensors(); //read all sensors and set global variables of their readouts	
+		
 		int photo_sum = left_photo_value + right_photo_value; // the sum of photo sensor readings
-		int center_green = get_object_center(0,0).x;
-		int center_camera = 0.5 * get_camera_width();
-		printf("camera values: %i, %i, \n", center_green, center_camera);
-		int photo_threshold = 80;		//the sum of photo sensor readings has to be below this for light states
+		//printf("Photo_sum: %i \n", photo_sum);
+		time++;
+		//printf("Time: %i \n", time);
 		
 		if(timer_elapsed()){ //any time a drive message is called, the timer is updated.  Until it is called again this should always return true
-				
-			if(photo_sum < photo_threshold){
-				// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
-				if(is_front_bump()){
-					escape_front();
-				}
-				else if(is_back_bump()){
-					escape_back();
-				}
-				else if(is_green()){
-					approach_green();
-				}
-				else if(is_above_distance_threshold(avoid_threshold)){
-					avoid();
+			if(time < time_hunger){	
+				if(photo_sum < photo_threshold){
+					state_light();
 				}
 				else{
-					cruise_straight();
-				}		
-			}//end if timer elapsed
-		
+					state_dark();
+				}
+			}	
+			else if(time >= time_hunger && time < time_scan){
+				state_hunger();
+			}	
 			else{
-				// hierarchy:  escape front, escape back, avoid, cruise zigzag
-				if(is_front_bump()){
-					escape_front();
-				}
-				else if(is_back_bump()){
-					escape_back();
-				}
-				else if(is_above_distance_threshold(avoid_threshold)){
-					avoid();
-				}
-				else{
-					cruise_zigzag();
-				}
+				state_scan();
 			}
 		}
 	}
 	return 0; 
-}	
+}
+
+//================================================================================================================//
+//========================================================STATES==================================================//
+//================================================================================================================//
+
+void state_light(){
+// hierarchy:  escape front, escape back, avoid red, approach blue, cruise straight
+	//printf("LIGHT \n");
+	if(is_front_bump()){
+		escape_front();
+	}
+	else if(is_back_bump()){
+		escape_back();
+	}
+	else if(is_red()){
+		avoid_red();
+	}
+	else if(is_green()){
+		approach_green();
+	}
+	else if(is_above_distance_threshold()){
+		avoid();
+	}
+	else{
+		cruise_straight();
+	}		
+}
+
+void state_dark(){
+// hierarchy:  escape front, escape back, avoid, cruise zigzag
+	//printf("DARK \n");
+	if(is_front_bump()){
+		escape_front();
+	}
+	else if(is_back_bump()){
+		escape_back();
+	}
+	else if(is_above_distance_threshold()){
+		avoid();
+	}
+	else{
+		cruise_zigzag();
+	}
+}
+
+void state_hunger(){
+	printf("I AM HUNGRY I NEED TO EAT \n");
+	if(is_front_bump()){
+		escape_front();
+	}
+	else if(is_back_bump()){
+		escape_back();
+	}
+	else if(is_green()){
+		approach_green();
+	}
+	else if(is_red()){
+		approach_red();
+	}
+	else if(is_above_distance_threshold()){
+		avoid();
+	}
+	else{
+		cruise_straight_hunger();
+	}
+}
+
+void state_scan(){
+	//printf("SCAN \n");
+	drive(0.0, 0.5, 0.5);
+	if(is_red() || is_green()){
+		time = time_hunger;
+	}
+	else if(time > time_dance){
+		dance();
+		//printf("DANCE TIME \n");
+	}
+}
+				
 //================================================================================================================//
 //========================================================ACTION==================================================//
 //================================================================================================================//
@@ -183,6 +263,7 @@ int main()
 void escape_front(){
 	float bump_midpoint = 250.0;
 	float bump_max = 400.0;
+	//printf("Escape Front \n");
 	
 	if(front_bump_value < bump_midpoint){
 		float backup_time = map((float)front_bump_value, 0.0, bump_midpoint, 0.3, 0.75); //spend more time backing up with an arc as we hit closer to the center
@@ -197,6 +278,7 @@ void escape_front(){
 void escape_back(){
 	float bump_midpoint = 250.0;
 	float bump_max = 400.0;
+	//printf("Escape back \n");
 	
 	if(back_bump_value < bump_midpoint){
 		float backup_time = map((float)back_bump_value, 0.0, bump_midpoint, 0.3, 0.75); //spend more time backing up with an arc as we hit closer to the center
@@ -209,6 +291,8 @@ void escape_back(){
 }
 
 void avoid(){
+	//printf("Avoid \n");
+	
 	if(left_ir_value > avoid_threshold){
 		drive(0.5, -0.5, 0.1);
 	}
@@ -219,10 +303,17 @@ void avoid(){
 }
 
 void cruise_straight(){
+	//printf("Straight \n");
 	drive(0.5, 0.5, 0.5);
 }
 
+void cruise_straight_hunger(){
+	//printf("Straight hunger \n");
+	drive(0.8, 0.8, 0.1);
+}
+
 void cruise_zigzag(){
+	//printf("Zigzag \n");
 	drive(0.25, 0.8, 0.2);
 	msleep(1000);
 	drive(0.4, 0.25, 0.2);
@@ -230,23 +321,66 @@ void cruise_zigzag(){
 }
 
 void stop(){
+	//printf("Stop \n");
 	drive(0.0, 0.0, 0.25);
 }
 
 void dance(){
+	//printf("Dance \n");
 	drive(0.0, 1.0, 1.2);
 	msleep(1000);
 	drive(0.6, 0.0, 1.2);
-	msleep(1000);
+	msleep(1000);	
 }
 
 void approach_green(){
 	int center_green = get_object_center(0,0).x;
 	int center_camera = 0.5 * get_camera_width();
-	if(center_green > center_camera){
-		drive(0.1, 0.9, 0.5);
+	int green_area = get_object_area(0,0);
+	//printf("Approach Green, %i \n", green_area);
+	
+	if(center_green > (center_camera + 8)){
+		drive(0.5, 0, 0.05);
 	}	
-	else if(center_green < center_camera){
-		drive(0.9, 0.1, 0.5);
+	else if(center_green < (center_camera - 8)){
+		drive(0, 0.5, 0.05);
+	}
+	else{
+		drive(0.8, 0.8, 0.5);
 	}
 }
+
+void avoid_red(){
+	int center_red = get_object_center(1,0).x;
+	int center_camera = 0.5 * get_camera_width();
+	int red_area = get_object_area(1,0);
+	//printf("Avoid Red, %i \n", red_area);
+	
+	if(center_red > center_camera){
+		drive(0, 0.75, 0.1);
+	}	
+	else if(center_red <= center_camera){
+		drive(0.75, 0, 0.1);
+	}
+	else{
+		drive(0.5, 0.5, 0.5);
+	}
+}
+
+void approach_red(){
+	int center_red = get_object_center(1,0).x;
+	int center_camera = 0.5 * get_camera_width();
+	int red_area = get_object_area(1,0);
+	//printf("Approach Red, %i \n", red_area);
+	
+	if(center_red > (center_camera + 8)){
+		drive(0.5, 0, 0.05);
+	}	
+	else if(center_red < (center_camera - 8)){
+		drive(0, 0.5, 0.05);
+	}
+	else{
+		drive(0.8, 0.8, 0.5);
+	}
+}
+
